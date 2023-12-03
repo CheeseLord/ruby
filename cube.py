@@ -71,22 +71,24 @@ class Cube:
         _cyclicallyRotate(self.getSurroundingSlices(face))
 
     def getSurroundingSlices(self, face):
-        # TODO maybe align these?
         if   face == F_U:
-            return self.F[0, :], self.L[0, :], self.B[0, :], self.R[0, :]
+            return self.F[0,     :], self.L[0,       :], \
+                   self.B[0,     :], self.R[0,       :]
         elif face == F_L:
-            return self.U[:, 0], self.F[:, 0], self.D[:, 0], self.B[::-1, -1]
+            return self.U[:,     0], self.F[:,       0], \
+                   self.D[:,     0], self.B[::-1,   -1]
         elif face == F_F:
-            return self.L[::-1, -1], self.U[-1, :], self.R[:, 0], \
-                self.D[0, ::-1]
+            return self.L[::-1, -1], self.U[-1,      :], \
+                   self.R[:,     0], self.D[0,    ::-1]
         elif face == F_R:
-            return self.D[::-1, -1], self.F[::-1, -1], self.U[::-1, -1], \
-                self.B[:, 0]
+            return self.D[::-1, -1], self.F[::-1,   -1], \
+                   self.U[::-1, -1], self.B[:,       0]
         elif face == F_B:
-            return self.R[::-1, -1], self.U[0, ::-1], self.L[0, :], \
-                self.D[::-1, -1]
+            return self.R[::-1, -1], self.U[0,    ::-1], \
+                   self.L[0,     :], self.D[::-1,   -1]
         elif face == F_D:
-            return self.B[-1, :], self.L[-1, :], self.F[-1, :], self.R[-1, :]
+            return self.B[-1,    :], self.L[-1,      :], \
+                   self.F[-1,    :], self.R[-1,      :]
         else:
             assert False
 
