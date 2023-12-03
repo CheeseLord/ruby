@@ -111,8 +111,12 @@ class Cube:
 
 
 def _cyclicallyRotate(l):
-    a, b, c, d = [x.copy() for x in l]
-    a[:], b[:], c[:], d[:] = d, a, b, c
+    a, b, c, d = l
+    # Copy the slices on the rhs so that they don't get modified as we write
+    # the lhs. Don't copy the lhs because we want to write back to the cube
+    # face arrays. (That is, we can't just map .copy() onto l before unpacking
+    # in the previous line.)
+    a[:], b[:], c[:], d[:] = d.copy(), a.copy(), b.copy(), c.copy()
 
 
 if __name__ == '__main__':
