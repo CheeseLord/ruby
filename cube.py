@@ -100,5 +100,6 @@ def _cyclicallyRotate(a, b, c, d):
 
 if __name__ == '__main__':
     cube = Cube()
+    cube.rotateF()
     print(cube)
 
