@@ -111,7 +111,7 @@ class Cube:
 
 
 def _cyclicallyRotate(l):
-    a, b, c, d = l
+    a, b, c, d = [x.copy() for x in l]
     a[:], b[:], c[:], d[:] = d, a, b, c
 
 
