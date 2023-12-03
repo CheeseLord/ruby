@@ -95,7 +95,7 @@ class Cube:
 
 
 def _cyclicallyRotate(a, b, c, d):
-    a[:], b[:], c[:], d[:] = d, a, b, c
+    a[:], b[:], c[:], d[:] = d.copy(), a.copy(), b.copy(), c.copy()
 
 
 if __name__ == '__main__':
