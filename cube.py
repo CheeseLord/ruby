@@ -1,5 +1,12 @@
 import numpy as np
 
+F_U = 0
+F_L = 1
+F_F = 2
+F_R = 3
+F_B = 4
+F_D = 5
+
 C_W = 0
 C_O = 1
 C_G = 2
@@ -18,21 +25,23 @@ _colorToLetter = {
 
 class Cube:
     def __init__(self):
-        self.u = np.ones((3, 3), dtype=int) * C_W
-        self.l = np.ones((3, 3), dtype=int) * C_O
-        self.f = np.ones((3, 3), dtype=int) * C_G
-        self.r = np.ones((3, 3), dtype=int) * C_R
-        self.b = np.ones((3, 3), dtype=int) * C_B
-        self.d = np.ones((3, 3), dtype=int) * C_Y
+        self.faces = [
+            np.ones((3, 3), dtype=int) * C_W,
+            np.ones((3, 3), dtype=int) * C_O,
+            np.ones((3, 3), dtype=int) * C_G,
+            np.ones((3, 3), dtype=int) * C_R,
+            np.ones((3, 3), dtype=int) * C_B,
+            np.ones((3, 3), dtype=int) * C_Y,
+        ]
 
     def __repr__(self):
         # FIXME: Do this without 6*3*3 local variables.
-        [[utl, utm, utr], [uml, umm, umr], [ubl, ubm, ubr]] = cube.u
-        [[ltl, ltm, ltr], [lml, lmm, lmr], [lbl, lbm, lbr]] = cube.l
-        [[ftl, ftm, ftr], [fml, fmm, fmr], [fbl, fbm, fbr]] = cube.f
-        [[rtl, rtm, rtr], [rml, rmm, rmr], [rbl, rbm, rbr]] = cube.r
-        [[btl, btm, btr], [bml, bmm, bmr], [bbl, bbm, bbr]] = cube.b
-        [[dtl, dtm, dtr], [dml, dmm, dmr], [dbl, dbm, dbr]] = cube.d
+        [[utl, utm, utr], [uml, umm, umr], [ubl, ubm, ubr]] = self.U
+        [[ltl, ltm, ltr], [lml, lmm, lmr], [lbl, lbm, lbr]] = self.L
+        [[ftl, ftm, ftr], [fml, fmm, fmr], [fbl, fbm, fbr]] = self.F
+        [[rtl, rtm, rtr], [rml, rmm, rmr], [rbl, rbm, rbr]] = self.R
+        [[btl, btm, btr], [bml, bmm, bmr], [bbl, bbm, bbr]] = self.B
+        [[dtl, dtm, dtr], [dml, dmm, dmr], [dbl, dbm, dbr]] = self.D
         return """\
         {} {} {}
         {} {} {}
@@ -57,49 +66,57 @@ class Cube:
                              dml, dmm, dmr,
                              dbl, dbm, dbr]])
 
-    def rotateU(self):
-        self.u = np.rot90(self.u)
-        _cyclicallyRotate(
-            self.f[0, :], self.l[0, :], self.b[0, :], self.r[0, :]
-        )
+    def rotateFace(self, face):
+        self.faces[face] = np.rot90(self.faces[face])
+        _cyclicallyRotate(self.getSurroundingSlices(face))
 
-    def rotateL(self):
-        self.l = np.rot90(self.l)
-        _cyclicallyRotate(
-            self.u[:, 0], self.f[:, 0], self.d[:, 0], self.b[::-1, -1]
-        )
+    def getSurroundingSlices(self, face):
+        # TODO maybe align these?
+        if   face == F_U:
+            return self.F[0, :], self.L[0, :], self.B[0, :], self.R[0, :]
+        elif face == F_L:
+            return self.U[:, 0], self.F[:, 0], self.D[:, 0], self.B[::-1, -1]
+        elif face == F_F:
+            return self.L[::-1, -1], self.U[-1, :], self.R[:, 0], \
+                self.D[0, ::-1]
+        elif face == F_R:
+            return self.D[::-1, -1], self.F[::-1, -1], self.U[::-1, -1], \
+                self.B[:, 0]
+        elif face == F_B:
+            return self.R[::-1, -1], self.U[0, ::-1], self.L[0, :], \
+                self.D[::-1, -1]
+        elif face == F_D:
+            return self.B[-1, :], self.L[-1, :], self.F[-1, :], self.R[-1, :]
+        else:
+            assert False
 
-    def rotateF(self):
-        self.f = np.rot90(self.f)
-        _cyclicallyRotate(
-            self.l[::-1, -1], self.u[-1, :], self.r[:, 0], self.d[0, ::-1]
-        )
-
-    def rotateR(self):
-        self.r = np.rot90(self.r)
-        _cyclicallyRotate(
-            self.d[::-1, -1], self.f[::-1, -1], self.u[::-1, -1], self.b[:, 0]
-        )
-
-    def rotateB(self):
-        self.b = np.rot90(self.b)
-        _cyclicallyRotate(
-            self.r[::-1, -1], self.u[0, ::-1], self.l[0, :], self.d[::-1, -1]
-        )
-
-    def rotateD(self):
-        self.d = np.rot90(self.d)
-        _cyclicallyRotate(
-            self.b[-1, :], self.l[-1, :], self.f[-1, :], self.r[-1, :]
-        )
+    @property
+    def U(self):
+        return self.faces[F_U]
+    @property
+    def L(self):
+        return self.faces[F_L]
+    @property
+    def F(self):
+        return self.faces[F_F]
+    @property
+    def R(self):
+        return self.faces[F_R]
+    @property
+    def B(self):
+        return self.faces[F_B]
+    @property
+    def D(self):
+        return self.faces[F_D]
 
 
-def _cyclicallyRotate(a, b, c, d):
+def _cyclicallyRotate(l):
+    a, b, c, d = l
     a[:], b[:], c[:], d[:] = d, a, b, c
 
 
 if __name__ == '__main__':
     cube = Cube()
-    cube.rotateF()
+    cube.rotateFace(F_F)
     print(cube)
 
