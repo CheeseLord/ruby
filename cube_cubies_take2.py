@@ -8,6 +8,9 @@ def main():
     selfTest()
     cube = Cube()
     print(cube)
+    print("\n" + "-"*29 + "\n")
+    cube.rotateFace(F_R)
+    print(cube)
 
 def selfTest():
     assert oppositeColor(C_R) == C_O
@@ -52,8 +55,78 @@ class Cube:
         # TODO make the cubie coords match these... except see above.
         self.cubies = np.full((3, 3, 3), CANONICAL_CUBIE)
 
+    # FIXME/BOOKMARK: This and rotateWholeCube don't actually change the
+    # orientations of the cubies. How to specify the axis of rotation for
+    # rotateCubie? Need a clearer understanding of the relationship between
+    # "cube coordinates" and "cubie coordinates". Which probably mostly means a
+    # clearer intuition for which axis is which when indexing numpy arrays...
+    def rotateFace(self, aboutFace, numQuarterTurns=1):
+        '''
+        Rotate just one face of the cube.
+        '''
+
+        # Note this is not the most efficient implementation, but it's
+        # relatively easy to conceptualize.
+
+        # First, rotate the cube so the face in question is in front.
+        toFrontAbout, toFrontNum = self._getRotationFaceToFront(aboutFace)
+        self.rotateWholeCube(toFrontAbout, toFrontNum)
+
+        # Next, rotate the front face by the requested amount.
+        self.cubies[0] = np.rot90(self.cubies[0], k=numQuarterTurns)
+
+        # Finally, undo the original rotation.
+        self.rotateWholeCube(toFrontAbout, -toFrontNum)
+
+    def _getRotationFaceToFront(self, face):
+        '''
+        Return (aboutFace, numQuarterTurns) that, when passed to
+        rotateWholeCube, would move 'face' to the front of the cube. For F_B,
+        do this in such a way that the orientation comes out correctly for
+        drawing the net for the cube (that is, rotate about the U/D axis, not
+        the L/R axis).
+        '''
+
+        return {
+            F_F : (F_U, 0), # No rotation needed
+            F_R : (F_U, 1),
+            F_B : (F_U, 2), # Use U/D axis so orientation is correct for net
+            F_L : (F_U, 3),
+            F_D : (F_R, 1),
+            F_U : (F_R, 3),
+        }[face]
+
+    def rotateWholeCube(self, aboutFace, numQuarterTurns=1):
+        '''
+        Rotate the entire cube clockwise about aboutFace by
+        numQuarterTurns * 90 degrees.
+        '''
+        self.cubies = self._getRotatedCubies(aboutFace, numQuarterTurns)
+
+    # TODO should this change the orientations of the cubies?
+    #   - If not, then rotateWholeCube is no longer a trivial wrapper around it
+    #   - If so, then it becomes kind of expensive for __repr__ to use given
+    #     that __repr__ already knows which face to access
+    #       - On the other hand, maybe getCubieFaces becomes obsolete if we
+    #         always rotate the cube so we're accessing only front faces of
+    #         cubies.
+    #           - But if we're going to take advantage of this, probably the
+    #             front face of the cubie should be one of the two actually
+    #             stored in the cubie's number form (so we don't have to do a
+    #             cross-product to reconstruct it every time).
+    def _getRotatedCubies(self, aboutFace, numQuarterTurns=1):
+        '''
+        Return the new cubies array that would result from a cube rotation
+        (as with rotateWholeCube), but don't modify the cube.
+        '''
+
+        return np.rot90(self.cubies, axes=_axesForClockwiseRotation[aboutFace],
+                k=numQuarterTurns)
+
     def __repr__(self):
         front = self.faceToString(F_F, self.cubies[0, :, :])
+
+        # TODO use _getRotationFaceToFront here?
 
         # clockwise about L maps U to F
         up    = self.faceToString(F_U, np.rot90(self.cubies,
@@ -146,6 +219,9 @@ def makeCubie(right, up):
     return (up << C_SHIFT) | right
 
 CANONICAL_CUBIE = makeCubie(C_R, C_W)
+
+# TODO:
+# def rotateCubie(cubie, ...how to specify axis?):
 
 def getCubieFaces(cubie):
     """
