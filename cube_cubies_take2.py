@@ -1,3 +1,4 @@
+import logging
 import numpy as np
 
 
@@ -5,6 +6,8 @@ import numpy as np
 # Driver code / self-tests
 
 def main():
+    #logging.basicConfig(level=logging.DEBUG)
+
     selfTest()
     cube = Cube()
     print(cube)
@@ -37,6 +40,15 @@ F_R = 3
 F_B = 4
 F_D = 5
 
+_faceToLetter = {
+    F_U: 'U',
+    F_L: 'L',
+    F_F: 'F',
+    F_R: 'R',
+    F_B: 'B',
+    F_D: 'D',
+}
+
 # Coordinate axes are (in order): front-ness, down-ness, right-ness. That is:
 #   - (0, 0, 0) is the BUL corner
 #   - (2, 0, 0) is the FUL corner
@@ -56,27 +68,13 @@ _axesForClockwiseRotation = {
     F_B : (1, 2), # down  to right
 }
 
+def frontSlice(cubies):
+    return cubies[2]
+
 class Cube:
     def __init__(self):
         self.cubies = np.full((3, 3, 3), CANONICAL_CUBIE)
 
-    # FIXME/BOOKMARK: This and rotateWholeCube don't actually change the
-    # orientations of the cubies. How to specify the axis of rotation for
-    # rotateCubie? Need a clearer understanding of the relationship between
-    # "cube coordinates" and "cubie coordinates". Which probably mostly means a
-    # clearer intuition for which axis is which when indexing numpy arrays...
-    #   - Idea: can we just pass a face, and have rotateCubie use
-    #     _axesForClockwiseRotation? Something like:
-    #         fdr = getCubieFDR(cubie)
-    #         rotAxes = _axesForClockwiseRotation[face]
-    #         newFdr = fdr[:]
-    #         newFdr[rotAxes[1]] = fdr[rotAxes[0]]
-    #         newFdr[rotAxes[0]] = fdr[oppositeColor(rotAxes[1])]
-    #     Though this feels like I'm reimplementing np.rot90... can we express
-    #     this somehow as a 3D array so that rot90 just does the right thing?
-    #       - Or a 4D array consisting of 2 slices for the 2 3D vectors we need
-    #         to rotate?
-    #           - No, that's too complicated
     def rotateFace(self, aboutFace, numQuarterTurns=1):
         '''
         Rotate just one face of the cube.
@@ -85,15 +83,26 @@ class Cube:
         # Note this is not the most efficient implementation, but it's
         # relatively easy to conceptualize.
 
+        self._debugCube("rotateFace start (%s)" % _faceToLetter[aboutFace])
+
         # First, rotate the cube so the face in question is in front.
         toFrontAbout, toFrontNum = self._getRotationFaceToFront(aboutFace)
         self.rotateWholeCube(toFrontAbout, toFrontNum)
 
+        self._debugCube("=> rotateFace after rotate to front")
+
         # Next, rotate the front face by the requested amount.
-        self.cubies[0] = np.rot90(self.cubies[0], k=numQuarterTurns)
+        # TODO factor out 2, as with frontSlice.
+        self.cubies[2] = np.rot90(self.cubies[2], k=numQuarterTurns)
+        self.cubies[2] = self._rotateCubies(self.cubies[2], F_F,
+                numQuarterTurns)
+
+        self._debugCube("=> rotateFace after rotate front face")
 
         # Finally, undo the original rotation.
         self.rotateWholeCube(toFrontAbout, -toFrontNum)
+
+        self._debugCube("=> rotateFace after rotate back to orig face")
 
     def _getRotationFaceToFront(self, face):
         '''
@@ -118,10 +127,25 @@ class Cube:
         Rotate the entire cube clockwise about aboutFace by
         numQuarterTurns * 90 degrees.
         '''
+        self._debugCube("rotateWholeCube(%s, %d), start" %
+                (_faceToLetter[aboutFace], numQuarterTurns))
+
         self.cubies = self._getRotatedCubies(aboutFace, numQuarterTurns)
+        self._debugCube("=> rotateWholeCube after permute")
+
+        self.cubies = self._rotateCubies(self.cubies, aboutFace,
+                numQuarterTurns)
+        self._debugCube("=> rotateWholeCube after orient")
+
+    # FIXME: Name too similar to _getRotatedCubies.
+    def _rotateCubies(self, cubies, aboutFace, numQuarterTurns=1):
+        doRotate = lambda cubie: rotateCubie(cubie, aboutFace, numQuarterTurns)
+        vecRotate = np.vectorize(doRotate)
+        return vecRotate(cubies)
 
     # TODO should this change the orientations of the cubies?
     #   - If not, then rotateWholeCube is no longer a trivial wrapper around it
+    #     (current behavior)
     #   - If so, then it becomes kind of expensive for __repr__ to use given
     #     that __repr__ already knows which face to access
     #       - On the other hand, maybe getCubieFaces becomes obsolete if we
@@ -141,27 +165,28 @@ class Cube:
                 k=numQuarterTurns)
 
     def __repr__(self):
-        front = self.faceToString(F_F, self.cubies[0, :, :])
+        self._debugCube("Cube.__repr__")
+        front = self.faceToString(F_F, frontSlice(self.cubies))
 
         # TODO use _getRotationFaceToFront here?
 
         # clockwise about L maps U to F
-        up    = self.faceToString(F_U, np.rot90(self.cubies,
-                        axes=_axesForClockwiseRotation[F_L])[0, :, :])
+        up    = self.faceToString(F_U, frontSlice(np.rot90(self.cubies,
+                        axes=_axesForClockwiseRotation[F_L])))
         # clockwise about R maps D to F
-        down  = self.faceToString(F_D, np.rot90(self.cubies,
-                        axes=_axesForClockwiseRotation[F_R])[0, :, :])
+        down  = self.faceToString(F_D, frontSlice(np.rot90(self.cubies,
+                        axes=_axesForClockwiseRotation[F_R])))
 
         # clockwise about D maps L to F
-        left  = self.faceToString(F_L, np.rot90(self.cubies,
-                        axes=_axesForClockwiseRotation[F_D])[0, :, :])
+        left  = self.faceToString(F_L, frontSlice(np.rot90(self.cubies,
+                        axes=_axesForClockwiseRotation[F_D])))
         # clockwise about U maps R to F
-        right = self.faceToString(F_R, np.rot90(self.cubies,
-                        axes=_axesForClockwiseRotation[F_U])[0, :, :])
+        right = self.faceToString(F_R, frontSlice(np.rot90(self.cubies,
+                        axes=_axesForClockwiseRotation[F_U])))
 
         # Twice clockwise about U maps B to F (in the orientation we want)
-        back  = self.faceToString(F_B, np.rot90(self.cubies,
-                        axes=_axesForClockwiseRotation[F_U], k=2)[0, :, :])
+        back  = self.faceToString(F_B, frontSlice(np.rot90(self.cubies,
+                        axes=_axesForClockwiseRotation[F_U], k=2)))
 
         # TODO refactor with part of faceToString to avoid hardcoding this
         emptyFace = '     \n     \n     '
@@ -169,6 +194,10 @@ class Cube:
         return concatFaces([emptyFace, up]) + '\n\n' + \
             concatFaces([left, front, right, back]) + '\n\n' + \
             concatFaces([emptyFace, down])
+
+    def _debugCube(self, msg):
+        logging.debug("%s:\n%s", msg,
+            np.vectorize(_debugCubieStr)(self.cubies))
 
     def faceToString(self, face, faceGrid):
         """
@@ -239,8 +268,19 @@ def makeCubie(front, down):
 
 CANONICAL_CUBIE = makeCubie(C_G, C_Y)
 
-# TODO:
-# def rotateCubie(cubie, ...how to specify axis?):
+def rotateCubie(cubie, face, numQuarterTurns=1):
+    fdr = list(getCubieFDR(cubie))
+    rotAxes = _axesForClockwiseRotation[face]
+    logging.debug("rotateCubie(%s, %s, %d)" %
+            (_debugCubieStr(cubie), _faceToLetter[face], numQuarterTurns))
+    for i in range(numQuarterTurns % 4):
+        oldFdr = fdr[:]
+        fdr[rotAxes[1]] = oldFdr[rotAxes[0]]
+        fdr[rotAxes[0]] = oppositeColor(oldFdr[rotAxes[1]])
+        logging.debug("=> After %d rotations: %s" %
+                (i + 1, "".join([_colorToLetter[c] for c in fdr])))
+    front, down, _ = fdr
+    return makeCubie(front, down)
 
 def getCubieFaces(cubie):
     """
@@ -250,7 +290,13 @@ def getCubieFaces(cubie):
     fdr = getCubieFDR(cubie)
     front, down, right = fdr
     back, up, left = [oppositeColor(c) for c in fdr]
-    return (up, left, front, right, back, down)
+    ret = (up, left, front, right, back, down)
+    #logging.debug("getCubieFaces(%#x): fdr is %s, returning %s",
+    #    cubie, list(map(_colorToLetter.get, fdr)), list(map(_colorToLetter.get, ret)))
+    return ret
+
+def _debugCubieStr(cubie):
+    return "".join([_colorToLetter[c] for c in getCubieFDR(cubie)])
 
 def getCubieFDR(cubie):
     """
