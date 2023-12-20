@@ -20,10 +20,10 @@ def selfTest():
     assert oppositeColor(C_G) == C_B
     assert oppositeColor(C_B) == C_G
 
-    assert getRUF(makeCubie(C_R, C_W)) == (C_R, C_W, C_G)
-    assert getRUF(makeCubie(C_Y, C_R)) == (C_Y, C_R, C_G)
-    assert getRUF(makeCubie(C_O, C_B)) == (C_O, C_B, C_Y)
-    assert getRUF(makeCubie(C_G, C_Y)) == (C_G, C_Y, C_R)
+    assert getCubieFDR(makeCubie(C_R, C_W)) == (C_R, C_W, C_G)
+    assert getCubieFDR(makeCubie(C_Y, C_R)) == (C_Y, C_R, C_G)
+    assert getCubieFDR(makeCubie(C_O, C_B)) == (C_O, C_B, C_Y)
+    assert getCubieFDR(makeCubie(C_G, C_Y)) == (C_G, C_Y, C_R)
 
 
 ########################################
@@ -37,22 +37,27 @@ F_R = 3
 F_B = 4
 F_D = 5
 
+# Coordinate axes are (in order): front-ness, down-ness, right-ness. That is:
+#   - (0, 0, 0) is the BUL corner
+#   - (2, 0, 0) is the FUL corner
+#   - (0, 2, 0) is the BDL corner
+#   - (0, 0, 2) is the BUR corner
+# This means that numpy's pretty-print order matches the layout of the cube:
+#   - Pages go back-to-front
+#   - Rows go up-to-down
+#   - Columns go left-to-right
+
 _axesForClockwiseRotation = {
-    F_R : (0, 1), # back  to down
-    F_L : (1, 0), # down  to back
-    F_U : (0, 2), # back  to right
-    F_D : (2, 0), # right to back
+    F_R : (1, 0), # down  to front
+    F_L : (0, 1), # front to down
+    F_U : (2, 0), # right to front
+    F_D : (0, 2), # front to right
     F_F : (2, 1), # right to down
     F_B : (1, 2), # down  to right
 }
 
 class Cube:
     def __init__(self):
-        # Indices are (in order): back-ness, down-ness, right-ness.
-        # TODO: This works out reasonably with how the array gets
-        # pretty-printed, but isn't it a left-handed coordinate system? Back
-        # cross down should be left, not right. Does this matter?
-        # TODO make the cubie coords match these... except see above.
         self.cubies = np.full((3, 3, 3), CANONICAL_CUBIE)
 
     # FIXME/BOOKMARK: This and rotateWholeCube don't actually change the
@@ -60,6 +65,18 @@ class Cube:
     # rotateCubie? Need a clearer understanding of the relationship between
     # "cube coordinates" and "cubie coordinates". Which probably mostly means a
     # clearer intuition for which axis is which when indexing numpy arrays...
+    #   - Idea: can we just pass a face, and have rotateCubie use
+    #     _axesForClockwiseRotation? Something like:
+    #         fdr = getCubieFDR(cubie)
+    #         rotAxes = _axesForClockwiseRotation[face]
+    #         newFdr = fdr[:]
+    #         newFdr[rotAxes[1]] = fdr[rotAxes[0]]
+    #         newFdr[rotAxes[0]] = fdr[oppositeColor(rotAxes[1])]
+    #     Though this feels like I'm reimplementing np.rot90... can we express
+    #     this somehow as a 3D array so that rot90 just does the right thing?
+    #       - Or a 4D array consisting of 2 slices for the 2 3D vectors we need
+    #         to rotate?
+    #           - No, that's too complicated
     def rotateFace(self, aboutFace, numQuarterTurns=1):
         '''
         Rotate just one face of the cube.
@@ -191,34 +208,36 @@ def concatFaces(faces):
 # Idea: map each color to a (unit) vector representing its direction from the
 # cube center when it's in the canonical state and orientation (solved, white
 # on top, green in front). Then we can use the cross product to figure out the
-# third (perpendicular) face given two faces in known positions. Since we're
-# going to put these into numpy arrays which want to have single numbers,
-# pack triples of (-1, 0, 1) into 6-bit numbers: bits 0,1 represent the
-# red/orange direction (x axis), bits 2,3 the white/yellow (y) axis, bits 4,5
-# the green/blue (z) axis. Store -1 as 2 (i.e., take the coordinates mod 3) so
-# that every color is a nice power of 2.
-C_R = 0b000001 # ( 1,  0,  0)
-C_O = 0b000010 # (-1,  0,  0)
-C_W = 0b000100 # ( 0,  1,  0)
-C_Y = 0b001000 # ( 0, -1,  0)
-C_G = 0b010000 # ( 0,  0,  1)
-C_B = 0b100000 # ( 0,  0, -1)
+# third (perpendicular) face given two faces in known positions. The coordinate
+# axes here are the same as for the cube: front-ness, down-ness, right-ness.
+#
+# Since we're going to put these into numpy arrays which want to have single
+# numbers, pack triples of (-1, 0, 1) into 6-bit numbers: bits 0,1 represent
+# the page axis (blue->green), 2,3 the row axis (white->yellow), 4,5 the column
+# axis (orange->red). Store -1 as 2 (i.e., take the coordinates mod 3) so that
+# the 6 colors all pack to powers of 2.
+C_G = 0b000001 # ( 1,  0,  0)
+C_B = 0b000010 # (-1,  0,  0)
+C_Y = 0b000100 # ( 0,  1,  0)
+C_W = 0b001000 # ( 0, -1,  0)
+C_R = 0b010000 # ( 0,  0,  1)
+C_O = 0b100000 # ( 0,  0, -1)
 C_SHIFT = 6
 C_MASK  = (1 << C_SHIFT) - 1
 
 _colorToLetter = {
-    C_R: 'R',
-    C_O: 'O',
-    C_W: 'W',
-    C_Y: 'Y',
     C_G: 'G',
     C_B: 'B',
+    C_Y: 'Y',
+    C_W: 'W',
+    C_R: 'R',
+    C_O: 'O',
 }
 
-def makeCubie(right, up):
-    return (up << C_SHIFT) | right
+def makeCubie(front, down):
+    return (down << C_SHIFT) | front
 
-CANONICAL_CUBIE = makeCubie(C_R, C_W)
+CANONICAL_CUBIE = makeCubie(C_G, C_Y)
 
 # TODO:
 # def rotateCubie(cubie, ...how to specify axis?):
@@ -228,20 +247,24 @@ def getCubieFaces(cubie):
     Return the list of face colors for a cubie, in ULFRBD order
     """
 
-    ruf = getRUF(cubie)
-    right, up, front = ruf
-    left, down, back = [oppositeColor(c) for c in ruf]
+    fdr = getCubieFDR(cubie)
+    front, down, right = fdr
+    back, up, left = [oppositeColor(c) for c in fdr]
     return (up, left, front, right, back, down)
 
-def getRUF(cubie):
-    right = cubie & C_MASK
-    up    = cubie >> C_SHIFT
-    front = packColor(np.cross(unpackColor(right), unpackColor(up)))
-    # If right and up are either the same color or opposite colors, then their
-    # cross product will be (0, 0, 0), which packs to 0. This indicates an
-    # invalid cubie.
-    assert front != 0
-    return (right, up, front)
+def getCubieFDR(cubie):
+    """
+    Return, in order, the sticker colors for the F, D, and R sides of a cubie.
+    (That is, the 3 positive axes in order.)
+    """
+    front = cubie & C_MASK
+    down  = cubie >> C_SHIFT
+    right = packColor(np.cross(unpackColor(front), unpackColor(down)))
+    # If front and down are either the same color or opposite colors, then
+    # their cross product will be (0, 0, 0), which packs to 0. This indicates
+    # an invalid cubie.
+    assert right != 0
+    return (front, down, right)
 
 def oppositeColor(color):
     return packColor([-x for x in unpackColor(color)])
