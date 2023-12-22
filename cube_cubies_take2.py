@@ -124,6 +124,14 @@ class Cube:
     def __init__(self):
         self.cubies = np.full((3, 3, 3), CANONICAL_CUBIE)
 
+    # Note that the following does not work, because it considers the cube
+    # unsolved if any of the centers are rotated.
+    #def isCanonical(self):
+    #    'Check if cube is solved and in canonical orientation'
+    #    print(self.cubies)
+    #    print(self.cubies == CANONICAL_CUBIE)
+    #    return (self.cubies == CANONICAL_CUBIE).all()
+
     def doMoves(self, moves):
         # If moves is given as a string, split it using _algSplitRe before we
         # start parsing it. Note that this means you have to put spaces between
@@ -137,8 +145,14 @@ class Cube:
         # or the slice is specified by prepending a number to the move: e.g.,
         # 3Rw turns the rightmost 3 layers, and 3R turns the third layer from
         # the right. So the string "R2U" could mean either "R2 U" or "R 2U".
+        #
+        # TODO if it's a list, split each element on space/parens and flatten
+        # the result?
         if type(moves) == str:
+            logging.info('doMoves: %s', moves)
             moves = _algSplitRe.split(moves)
+        else:
+            logging.info('doMoves: %s', ' '.join(moves))
         for move in moves:
             logging.debug("\n\n>>> EXECUTE MOVE: %s", move)
             # Skip empty strings in case moves started/ended with a paren.
